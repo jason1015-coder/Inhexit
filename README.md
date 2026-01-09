@@ -19,7 +19,7 @@ Welcome feature request, report bugs, suggest enhancements
 ```
 # thanks to nanocoder
 
-** this project is done using nano-collective's work nanocoder**
+**this project is done using nano-collective's work nanocoder**
 
 link for nano-collective(https://nanocollective.org/)
 
