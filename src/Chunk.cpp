@@ -1,5 +1,5 @@
 /*
- * Chunk Implementation
+ * Chunk Implementation - Fixed for SFML 3.0.2
  */
 
 #include "Chunk.h"
@@ -67,13 +67,12 @@ void Chunk::render(sf::RenderWindow& window, const sf::View& view) {
     const float hexWidth = HEX_SIZE * 2.0f;
     const float hexHeight = HEX_SIZE * std::sqrt(3.0f);
     
-    // Get the current view's visible area
-    sf::FloatRect viewBounds(
-        view.getCenter().x - view.getSize().x / 2.0f,
-        view.getCenter().y - view.getSize().y / 2.0f,
-        view.getSize().x,
-        view.getSize().y
-    );
+    // SFML 2.5 compatible: Use .left/.top/.width/.height
+    sf::FloatRect viewBounds;
+    viewBounds.left = view.getCenter().x - view.getSize().x / 2.0f;
+    viewBounds.top = view.getCenter().y - view.getSize().y / 2.0f;
+    viewBounds.width = view.getSize().x;
+    viewBounds.height = view.getSize().y;
     
     for (int q = 0; q < CHUNK_SIZE; q++) {
         for (int r = 0; r < CHUNK_HEIGHT; r++) {
@@ -87,7 +86,7 @@ void Chunk::render(sf::RenderWindow& window, const sf::View& view) {
             // Use the HexCoord toPixel method for perfect alignment
             sf::Vector2f center = HexCoord(globalQ, globalR).toPixel(HEX_SIZE);
             
-            // Skip rendering if not in view (with some margin)
+            // Culling check
             if (center.x + hexWidth < viewBounds.left || 
                 center.x - hexWidth > viewBounds.left + viewBounds.width ||
                 center.y + hexHeight < viewBounds.top ||
@@ -123,8 +122,10 @@ void Chunk::renderLOD(sf::RenderWindow& window, const sf::View& /*view*/) {
     
     // Create a simplified mesh representing the chunk
     sf::RectangleShape chunkRect;
-    chunkRect.setSize(sf::Vector2f(CHUNK_SIZE * HEX_SIZE * 1.5f, CHUNK_HEIGHT * HEX_SIZE * std::sqrt(3.0f)));
-    chunkRect.setPosition(worldX, worldY);
+    chunkRect.setSize({CHUNK_SIZE * HEX_SIZE * 1.5f, CHUNK_HEIGHT * HEX_SIZE * std::sqrt(3.0f)});
+    
+    // SFML 3 Fix: setPosition now requires a Vector2 or initializer list
+    chunkRect.setPosition({worldX, worldY});
     
     // Calculate dominant block type for chunk color
     int blockCounts[10] = {0};

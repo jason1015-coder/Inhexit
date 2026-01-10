@@ -12,7 +12,10 @@
 #include "World.h"
 #include "Camera.h"
 #include "Menu.h"
-#include "MultiplayerClient.h"
+#include "TimeSystem.h"
+#include "WeatherSystem.h"
+#include "InventorySystem.h"
+// #include "MultiplayerClient.h"
 
 class Game {
 private:
@@ -21,7 +24,7 @@ private:
     World* world;
     Player* player;
     Camera* camera;
-    MultiplayerClient* multiplayer;
+    // MultiplayerClient* multiplayer;
     
     int width;
     int height;
@@ -32,6 +35,11 @@ private:
     
     bool running;
     bool multiplayerMode;
+    
+    // Time and weather systems
+    TimeSystem* timeSystem;
+    WeatherSystem* weatherSystem;
+    InventorySystem* inventorySystem;
     
     // Menu state management
     MenuState currentState;
@@ -47,11 +55,15 @@ private:
     void render();
     
     // Multiplayer methods
-    void setupMultiplayerCallbacks();
-    void updateMultiplayer();
+    // void setupMultiplayerCallbacks();
+    // void updateMultiplayer();
     
     // Helper method
     HexCoord pixelToHex(sf::Vector2f pixel);
+    
+    // Save/Load
+    void saveGame(const std::string& filename);
+    void loadGame(const std::string& filename);
     
 public:
     Game(int width, int height, const std::string& title);

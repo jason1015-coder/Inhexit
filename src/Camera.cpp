@@ -4,10 +4,9 @@
 
 #include "Camera.h"
 
-Camera::Camera(float width, float height) {
-    view.setSize(width, height);
-    view.setCenter(width / 2, height / 2);
-    smoothFactor = 0.15f;  // Smooth following factor
+Camera::Camera(float width, float height) : smoothFactor(0.15f) {
+    view.setSize({width, height});
+    view.setCenter({width / 2.f, height / 2.f});
 }
 
 void Camera::update(const Player& player) {

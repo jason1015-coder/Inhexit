@@ -28,6 +28,12 @@ private:
     // Block interaction
     std::shared_ptr<BlockInteractionSystem> blockInteraction;
     
+    // Spawn position for respawn
+    sf::Vector2f spawnPosition;
+    
+    // Player skin color
+    sf::Color playerColor;
+    
     // Collision detection helper
     bool checkCollision(const World& world, const sf::Vector2f& newPos);
     bool isSolidBlock(const World& world, const HexCoord& coord);
@@ -61,9 +67,16 @@ public:
     sf::Vector2f getPosition() const { return position; }
     sf::Vector2f getSize() const { return size; }
     bool getIsOnGround() const { return isOnGround; }
+    sf::Color getPlayerColor() const { return playerColor; }
+    sf::Vector2f getSpawnPosition() const { return spawnPosition; }
     
     // Setters
     void setPosition(float x, float y) { position.x = x; position.y = y; }
+    void setPlayerColor(const sf::Color& color) { playerColor = color; shape.setFillColor(color); }
+    void setSpawnPosition(float x, float y) { spawnPosition = sf::Vector2f(x, y); }
+    
+    // Respawn
+    void respawn();
     
     // Inventory access
     std::shared_ptr<BlockInteractionSystem> getBlockInteraction() { return blockInteraction; }

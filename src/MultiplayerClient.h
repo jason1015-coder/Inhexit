@@ -6,14 +6,14 @@
 #ifndef MULTIPLAYER_CLIENT_H
 #define MULTIPLAYER_CLIENT_H
 
-#include <SFML/Network.hpp>
-#include <string>
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <queue>
 #include <functional>
-#include <atomic>
+#include <string>
 #include <map>
+#include <SFML/Network.hpp>
 
 enum class MessageType {
     INITIAL_STATE,

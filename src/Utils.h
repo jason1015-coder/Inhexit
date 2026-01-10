@@ -20,8 +20,8 @@ const float MOVE_SPEED = 6.0f;    // Faster walking
 const float FRICTION = 0.82f;     // Slight slide for organic movement
 
 // World Constants
-const int WORLD_WIDTH = 200;      // Wider world
-const int WORLD_HEIGHT = 100;     // Deeper world
+const int WORLD_WIDTH = 500;      // INCREASED: Much wider world (was 200)
+const int WORLD_HEIGHT = 300;     // INCREASED: Much deeper world (was 100)
 
 // Block Types (Terraria Essentials)
 enum BlockType {
@@ -34,7 +34,8 @@ enum BlockType {
     WATER,
     SAND,
     COAL,    // Added for variety
-    IRON     // Added for variety
+    IRON,    // Added for variety
+    SNOW     // Added for winter biome
 };
 
 struct HexCoord {
@@ -86,5 +87,29 @@ struct HexCoord {
 std::vector<sf::Vector2f> getHexagonVertices(float hexSize, const sf::Vector2f& center);
 sf::Color getBlockColor(BlockType type);
 sf::Color hslToRgb(float h, float s, float l);
+
+// Biome Types
+enum class BiomeType {
+    NORMAL,
+    DESERT
+};
+
+// Weather Types
+enum class WeatherType {
+    CLEAR,
+    RAIN,
+    SNOW,
+    HAIL,
+    BLIZZARD,
+    CLOUDY
+};
+
+// Season Types
+enum class Season {
+    SPRING,
+    SUMMER,
+    AUTUMN,
+    WINTER
+};
 
 #endif // UTILS_H

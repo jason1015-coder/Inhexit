@@ -8,6 +8,7 @@
 
 #include "Utils.h"
 #include <SFML/Graphics.hpp>
+#include <cstdint>
 #include <vector>
 #include <memory>
 
@@ -87,7 +88,7 @@ namespace std {
     template<>
     struct hash<ChunkPosition> {
         size_t operator()(const ChunkPosition& pos) const {
-            return ((size_t)pos.chunkX << 32) | (size_t)(uint32_t)pos.chunkY;
+            return ((uint64_t)pos.chunkX << 32) | (uint32_t)pos.chunkY;
         }
     };
 }

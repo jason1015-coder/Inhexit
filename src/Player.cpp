@@ -7,12 +7,14 @@
 
 Player::Player(float x, float y) 
     : position(x, y), velocity(0, 0), 
-      size(HEX_SIZE * 0.9f, HEX_SIZE * 1.6f),  // About one block size
+      size(HEX_SIZE * 1.8f, HEX_SIZE * 3.2f),  // INCREASED: Larger player (was 0.9, 1.6)
       isOnGround(false), movingLeft(false), movingRight(false),
-      selectedBlock(BlockType::DIRT) {
+      selectedBlock(BlockType::DIRT),
+      spawnPosition(x, y) {  // Store spawn position
     
     shape.setRadius(size.x / 2);
-    shape.setFillColor(sf::Color(255, 100, 100));
+    shape.setFillColor(playerColor);  // Use customizable color
+    shape.setPosition({position.x - size.x / 2, position.y - size.y / 2});
     
     // Initialize block interaction system
     blockInteraction = std::make_shared<BlockInteractionSystem>();
@@ -47,6 +49,12 @@ HexCoord Player::getHexPosition() const {
 }
 
 void Player::update(float deltaTime, World& world) {
+    // Check for falling out of world
+    if (position.y > world.getHeight() * HEX_SIZE * 2.0f) {
+        respawn();
+        return;
+    }
+    
     // Apply gravity
     velocity.y += GRAVITY * deltaTime * 60.0f;
     
@@ -122,7 +130,7 @@ void Player::update(float deltaTime, World& world) {
     position = newPos;
     
     // Update shape position
-    shape.setPosition(position.x - size.x / 2, position.y - size.y / 2);
+    shape.setPosition({position.x - size.x / 2, position.y - size.y / 2});
     
     // Update block interaction system
     blockInteraction->update(deltaTime, world);
@@ -178,4 +186,10 @@ void Player::placeBlock(const HexCoord& coord) {
 
 void Player::selectBlock(BlockType type) {
     selectedBlock = type;
+}
+
+void Player::respawn() {
+    position = spawnPosition;
+    velocity = sf::Vector2f(0, 0);
+    isOnGround = false;
 }

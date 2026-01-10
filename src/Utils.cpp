@@ -13,8 +13,8 @@
 std::vector<sf::Vector2f> getHexagonVertices(float hexSize, const sf::Vector2f& center) {
     std::vector<sf::Vector2f> vertices;
     for (int i = 0; i < 6; i++) {
-        // Offset by -30 degrees for flat-top orientation
-        float angle_deg = 60.0f * i - 30.0f;
+        // ROTATED: Add 90 degrees (now offset by +60 degrees for flat-top orientation)
+        float angle_deg = 60.0f * i + 60.0f;
         float angle_rad = M_PI / 180.0f * angle_deg;
         vertices.push_back(sf::Vector2f(
             center.x + hexSize * cos(angle_rad),
@@ -36,6 +36,7 @@ sf::Color getBlockColor(BlockType type) {
         case LEAVES: return sf::Color(40, 130, 40);      // Leaf Green
         case COAL:   return sf::Color(40, 40, 45);       // Dark Coal
         case IRON:   return sf::Color(180, 160, 150);    // Metallic Tan
+        case SNOW:   return sf::Color(250, 250, 255);    // Snow White
         default:     return sf::Color::Magenta;          // Error color
     }
 }

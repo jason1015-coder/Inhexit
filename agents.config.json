@@ -1,0 +1,13 @@
+{
+  "nanocoder": {
+    "providers": [
+      {
+        "name": "Ollama",
+        "baseUrl": "http://localhost:11434/v1",
+        "models": [
+          "gpt-oss:20b"
+        ]
+      }
+    ]
+  }
+}

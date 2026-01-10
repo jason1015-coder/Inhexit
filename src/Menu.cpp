@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <iostream>
 
+template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+
 Menu::Menu() : currentState(MenuState::MAIN_MENU), selectedIndex(0), 
                volume(100.0f), playerName("Player"), backgroundOffset(0.0f) {
     
@@ -63,11 +65,10 @@ void Menu::setupMainMenu() {
     menuItems.clear();
     
     // Title
-    titleText.setFont(font);
-    titleText.setString("HEXA WORLD");
-    titleText.setCharacterSize(72);
+    titleText = sf::Text("HEXA WORLD", font, 72);
     titleText.setFillColor(sf::Color(255, 200, 100));
-    titleText.setPosition(WINDOW_WIDTH / 2 - titleText.getLocalBounds().width / 2, 100);
+    sf::FloatRect titleBounds = titleText.getLocalBounds();
+    titleText.setPosition(sf::Vector2f(WINDOW_WIDTH / 2 - titleBounds.width / 2, 100));
     
     // Menu options
     std::vector<std::string> options = {
@@ -76,15 +77,13 @@ void Menu::setupMainMenu() {
         "Settings",
         "Quit"
     };
-    
+
     float startY = 300;
     for (size_t i = 0; i < options.size(); i++) {
-        sf::Text item;
-        item.setFont(font);
-        item.setString(options[i]);
-        item.setCharacterSize(36);
+        sf::Text item(options[i], font, 36);
         item.setFillColor(sf::Color(200, 200, 200));
-        item.setPosition(WINDOW_WIDTH / 2 - item.getLocalBounds().width / 2, startY + i * 60);
+        sf::FloatRect itemBounds = item.getLocalBounds();
+        item.setPosition(sf::Vector2f(WINDOW_WIDTH / 2 - itemBounds.width / 2, startY + i * 60));
         menuItems.push_back(item);
     }
     
@@ -95,11 +94,10 @@ void Menu::setupSettingsMenu() {
     menuItems.clear();
     
     // Title
-    titleText.setFont(font);
-    titleText.setString("SETTINGS");
-    titleText.setCharacterSize(60);
+    titleText = sf::Text("SETTINGS", font, 60);
     titleText.setFillColor(sf::Color(255, 200, 100));
-    titleText.setPosition(WINDOW_WIDTH / 2 - titleText.getLocalBounds().width / 2, 100);
+    sf::FloatRect titleBounds = titleText.getLocalBounds();
+    titleText.setPosition(sf::Vector2f(WINDOW_WIDTH / 2 - titleBounds.width / 2, 100));
     
     // Settings options
     std::vector<std::string> options = {
@@ -107,15 +105,13 @@ void Menu::setupSettingsMenu() {
         "Player Name: " + playerName,
         "Back"
     };
-    
+
     float startY = 300;
     for (size_t i = 0; i < options.size(); i++) {
-        sf::Text item;
-        item.setFont(font);
-        item.setString(options[i]);
-        item.setCharacterSize(32);
+        sf::Text item(options[i], font, 32);
         item.setFillColor(sf::Color(200, 200, 200));
-        item.setPosition(WINDOW_WIDTH / 2 - item.getLocalBounds().width / 2, startY + i * 60);
+        sf::FloatRect itemBounds = item.getLocalBounds();
+        item.setPosition(sf::Vector2f(WINDOW_WIDTH / 2 - itemBounds.width / 2, startY + i * 60));
         menuItems.push_back(item);
     }
 }
@@ -124,11 +120,10 @@ void Menu::setupMultiplayerMenu() {
     menuItems.clear();
     
     // Title
-    titleText.setFont(font);
-    titleText.setString("MULTIPLAYER");
-    titleText.setCharacterSize(60);
+    titleText = sf::Text("MULTIPLAYER", font, 60);
     titleText.setFillColor(sf::Color(255, 200, 100));
-    titleText.setPosition(WINDOW_WIDTH / 2 - titleText.getLocalBounds().width / 2, 100);
+    sf::FloatRect titleBounds = titleText.getLocalBounds();
+    titleText.setPosition(sf::Vector2f(WINDOW_WIDTH / 2 - titleBounds.width / 2, 100));
     
     // Multiplayer options
     std::vector<std::string> options = {
@@ -136,15 +131,13 @@ void Menu::setupMultiplayerMenu() {
         "Join Game",
         "Back"
     };
-    
+
     float startY = 300;
     for (size_t i = 0; i < options.size(); i++) {
-        sf::Text item;
-        item.setFont(font);
-        item.setString(options[i]);
-        item.setCharacterSize(32);
+        sf::Text item(options[i], font, 32);
         item.setFillColor(sf::Color(200, 200, 200));
-        item.setPosition(WINDOW_WIDTH / 2 - item.getLocalBounds().width / 2, startY + i * 60);
+        sf::FloatRect itemBounds = item.getLocalBounds();
+        item.setPosition(sf::Vector2f(WINDOW_WIDTH / 2 - itemBounds.width / 2, startY + i * 60));
         menuItems.push_back(item);
     }
 }
@@ -243,26 +236,25 @@ void Menu::render(sf::RenderWindow& window) {
     
     // Render control instructions
     if (currentState == MenuState::MAIN_MENU) {
-        sf::Text instructions;
-        instructions.setFont(font);
-        instructions.setString("Controls: UP/DOWN to navigate, ENTER to select, SPACE to quick-start");
-        instructions.setCharacterSize(18);
+        sf::Text instructions("Controls: UP/DOWN to navigate, ENTER to select, SPACE to quick-start", font, 18);
         instructions.setFillColor(sf::Color(150, 150, 150));
-        instructions.setPosition(WINDOW_WIDTH / 2 - instructions.getLocalBounds().width / 2, 
-                               WINDOW_HEIGHT - 50);
+        sf::FloatRect instrBounds = instructions.getLocalBounds();
+        instructions.setPosition(sf::Vector2f(WINDOW_WIDTH / 2 - instrBounds.width / 2,
+                                WINDOW_HEIGHT - 50));
         window.draw(instructions);
     }
     
     // Render decorative elements
     sf::CircleShape glow(100);
     glow.setFillColor(sf::Color(255, 200, 100, 20));
-    glow.setPosition(WINDOW_WIDTH / 2 - 100, WINDOW_HEIGHT / 2 - 100);
+    glow.setPosition({WINDOW_WIDTH / 2.0f - 100, WINDOW_HEIGHT / 2.0f - 100});
     window.draw(glow);
 }
 
 void Menu::handleInput(sf::RenderWindow& window, const sf::Event& event, MenuState& currentState) {
     if (event.type == sf::Event::KeyPressed) {
-        switch (event.key.code) {
+        auto& keyEvent = event.key;
+        switch (keyEvent.code) {
             case sf::Keyboard::Up:
                 selectedIndex = (selectedIndex - 1 + menuItems.size()) % menuItems.size();
                 break;
@@ -291,21 +283,18 @@ void Menu::handleInput(sf::RenderWindow& window, const sf::Event& event, MenuSta
             default:
                 break;
         }
-    }
-    
-    // Mouse input
-    if (event.type == sf::Event::MouseMoved) {
-        sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+    } else if (event.type == sf::Event::MouseMoved) {
+        auto& mouseEvent = event.mouseMove;
+        sf::Vector2i mousePos(mouseEvent.x, mouseEvent.y);
         for (size_t i = 0; i < menuItems.size(); i++) {
             sf::FloatRect bounds = menuItems[i].getGlobalBounds();
-            if (bounds.contains(mousePos.x, mousePos.y)) {
+            if (bounds.contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
                 selectedIndex = i;
             }
         }
-    }
-    
-    if (event.type == sf::Event::MouseButtonPressed) {
-        if (event.mouseButton.button == sf::Mouse::Left) {
+    } else if (event.type == sf::Event::MouseButtonPressed) {
+        auto& mouseEvent = event.mouseButton;
+        if (mouseEvent.button == sf::Mouse::Button::Left) {
             processSelection();
             currentState = this->currentState;
         }

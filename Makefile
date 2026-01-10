@@ -1,69 +1,91 @@
-# Makefile for Hexagonal Terraria Game
+# Makefile - Modernized & cleaned up (2026 style)
 
-CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2
-LDFLAGS = -lsfml-graphics -lsfml-window -lsfml-system -lsfml-network -pthread
+.DEFAULT_GOAL := both
 
-# Source files
-SOURCES = src/main.cpp src/Game.cpp src/Player.cpp src/World.cpp src/Chunk.cpp \
-          src/Camera.cpp src/Menu.cpp src/Utils.cpp src/BlockInteraction.cpp \
-          src/MultiplayerClient.cpp
+.PHONY: both
 
-# Object files
-OBJECTS = $(SOURCES:.cpp=.o)
+both: win linux
+	@echo ""
+	@echo "Build finished:"
+	@ls -lh $(WIN_BIN) $(LINUX_BIN)
 
-# Target executable
-TARGET = hexaworld
+TARGET_NAME = game
 
-# Build directory
-BUILD_DIR = build
+SRC_DIR = src
+SOURCES = $(wildcard $(SRC_DIR)/*.cpp)
 
-# Default target
-all: $(TARGET)
+# Separate object files for each platform
+LINUX_OBJ = $(notdir $(SOURCES:.cpp=.linux.o))
+WIN_OBJ   = $(notdir $(SOURCES:.cpp=.win.o))
 
-# Create build directory
-$(BUILD_DIR):
-	@mkdir -p $(BUILD_DIR)
+# ──────────────── Windows cross-compile settings ────────────────
+WIN_CXX       = i686-w64-mingw32-g++           # or x86_64-w64-mingw32-g++ for 64-bit
+WIN_CXXFLAGS  = -O2 -Wall -std=c++17 -DSFML_STATIC \
+                -I$(SRC_DIR) -I$(SFML_WIN_INC)
+WIN_LDFLAGS   = -L$(SFML_WIN_LIB) -static \
+                -lsfml-graphics-s -lsfml-window-s -lsfml-network-s -lsfml-system-s \
+                -lopengl32 -lwinmm -lgdi32 -lws2_32 -mwindows
+WIN_BIN       = $(TARGET_NAME)-win32.exe       # or game.exe
 
-# Link the executable
-$(TARGET): $(OBJECTS) | $(BUILD_DIR)
-	$(CXX) $(OBJECTS) -o $(BUILD_DIR)/$(TARGET) $(LDFLAGS)
-	@echo "Build complete: $(BUILD_DIR)/$(TARGET)"
+# Adjust these paths!
+SFML_WIN_PATH = /home/$(USER)/SFML-3.0.2-windows-mingw-i686
+SFML_WIN_INC  = $(SFML_WIN_PATH)/include
+SFML_WIN_LIB  = $(SFML_WIN_PATH)/lib
 
-# Compile source files
-%.o: src/%.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+# ──────────────── Linux native settings ────────────────
+LINUX_CXXFLAGS = -O2 -Wall -std=c++17 -I$(SRC_DIR)
+LINUX_LDFLAGS  = -lsfml-graphics -lsfml-window -lsfml-network -lsfml-system
+LINUX_BIN      = $(TARGET_NAME).linux
 
-# Clean build artifacts
+# AppImage related (very basic — see notes below)
+APPIMAGE_NAME  = Game-x86_64.AppImage
+APPIMAGETOOL   ?= appimagetool
+LINUXDEPLOY    ?= linuxdeploy
+
+.PHONY: all win linux appimage clean
+
+all: linux win
+
+win: $(WIN_BIN)
+
+linux: $(LINUX_BIN)
+
+# Very basic appimage target (needs a lot more work!)
+appimage: $(LINUX_BIN) prepare-appdir
+	$(APPIMAGETOOL) ./AppDir $(APPIMAGE_NAME)
+
+# You almost always want linuxdeploy instead of raw appimagetool
+appimage-modern: $(LINUX_BIN)
+	$(LINUXDEPLOY) --executable $(LINUX_BIN) \
+	               --appdir AppDir \
+	               --desktop-file game.desktop \
+	               --icon-file game.png \
+	               --output appimage
+
+# Windows build with Windows object files
+$(WIN_BIN): $(WIN_OBJ)
+	$(WIN_CXX) $^ -o $@ $(WIN_LDFLAGS)
+
+# Linux build with Linux object files
+$(LINUX_BIN): $(LINUX_OBJ)
+	$(CXX) $^ -o $@ $(LINUX_LDFLAGS)
+
+# Linux object files
+%.linux.o: $(SRC_DIR)/%.cpp
+	$(CXX) $(LINUX_CXXFLAGS) -c $< -o $@
+
+# Windows object files
+%.win.o: $(SRC_DIR)/%.cpp
+	$(WIN_CXX) $(WIN_CXXFLAGS) -c $< -o $@
+
 clean:
-	rm -rf $(OBJECTS) $(BUILD_DIR)
-	@echo "Clean complete"
+	rm -f *.o *.linux.o *.win.o $(LINUX_BIN) $(WIN_BIN) *.AppImage
+	rm -rf AppDir
 
-# Run the game
-run: $(TARGET)
-	./$(BUILD_DIR)/$(TARGET)
-
-# Install dependencies (Ubuntu/Debian)
-install-deps:
-	@echo "Installing SFML dependencies..."
-	sudo apt-get update
-	sudo apt-get install -y libsfml-dev python3-pip
-	@echo "Installing Python dependencies..."
-	pip3 install -r src/requirements.txt
-
-# Run multiplayer server
-server:
-	@echo "Starting multiplayer server..."
-	python3 multiplayer_server.py
-
-# Help
-help:
-	@echo "Available targets:"
-	@echo "  all          - Build the game (default)"
-	@echo "  clean        - Remove build artifacts"
-	@echo "  run          - Build and run the game"
-	@echo "  server       - Start the multiplayer server"
-	@echo "  install-deps - Install required dependencies"
-	@echo "  help         - Show this help message"
-
-.PHONY: all clean run server install-deps help
+prepare-appdir: $(LINUX_BIN)
+	rm -rf AppDir
+	mkdir -p AppDir/usr/bin AppDir/usr/lib
+	cp $(LINUX_BIN)                AppDir/usr/bin/$(TARGET_NAME)
+	# Copy shared libs you actually need (very important!)
+	# ldd $(LINUX_BIN) | grep sfml | awk '{print $3}' | xargs -I {} cp {} AppDir/usr/lib/
+	# You should also copy plugins, assets, etc...

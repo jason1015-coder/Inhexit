@@ -7,6 +7,7 @@
 #define BLOCK_INTERACTION_H
 
 #include "Utils.h"
+#include <map>
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <memory>
