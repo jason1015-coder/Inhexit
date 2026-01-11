@@ -26,4 +26,4 @@ git add .
 git commit -m "initialization"
 
 # Push to GitHub
-git push origin main
+git push origin main --force
