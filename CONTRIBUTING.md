@@ -37,10 +37,10 @@ You can contribute easily by adding new block types to `blocks.py`. Ensure you d
 2.  **Transparency**: Determines if the block blocks light or allows the player to see through it.
 3.  **Solid**: Determines if the player can walk through it.
 
-### Reporting Bugs
+### Reporting Bugs/ New Feature Request
 * Use the GitHub Issues tab.
-* Describe the bug and provide steps to reproduce it.
-* Mention your Operating System and Python version.
+* Describe the bug/feature and provide steps to reproduce it.
+* Mention your Operating System and Python version.(for a bug)
 
 ### Pull Requests
 1.  Create a new branch for your feature (`git checkout -b feature/AmazingFeature`).
