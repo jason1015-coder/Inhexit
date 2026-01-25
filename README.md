@@ -2,20 +2,8 @@
 
 **Tesselbox** is an enhanced, hexagon-based sandbox exploration game built with Python and Pygame. It features a procedurally generated world with multiple biomes, mining mechanics, and a chunk-based rendering system for optimized performance.
 
----
-
-## 🚀 Features
-
-* **Hexagonal World**: A unique grid system using $30$-pixel hexagons for a distinct visual style.
-* **Procedural Generation**: Uses noise-based generation to create plains, deserts, mountains, and forests.
-* **Game Modes**: 
-    * **Survival**: Mine resources like coal, iron, gold, and diamonds to build your inventory.
-    * **Creative**: Unlimited resources and a flight mode for free building.
-* **Resource System**: Includes various block types such as Grass, Dirt, Stone, Sand, Glass, and various Ores.
-* **Physics & Raycasting**: Features gravity-based player movement and accurate raycasting for block mining and placement.
-* **Save/Load**: Automatically saves world and player data using Python's `pickle` module.
-
----
+## recent update 
+fixed the map showing error
 
 ## 🛠️ Installation
 
