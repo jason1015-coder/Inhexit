@@ -33,7 +33,7 @@ You must run the build command on the operating system you are targeting (e.g., 
 📦 Create the Executable
 
 Run the following command in your terminal. This command works for both Windows PowerShell/CMD and Linux Terminal:
-Bash
+'''Bash
 
 pyinstaller --onefile --windowed --name Tesselbox main.py
 
