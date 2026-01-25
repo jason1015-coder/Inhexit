@@ -14,9 +14,13 @@ fixed the map showing error
 
 
 -download form release(the newest one is recommanded)
--then slect your os
+
+-then select your os
+
 -delect the zip files of other os your are not using
+
 -then extract it
+
 -done!
 
 
