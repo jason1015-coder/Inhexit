@@ -24,6 +24,18 @@ from item import (
     DEFAULT_HOTBAR_ITEMS,
     DEFAULT_ITEM_ID
 )
+from biomes import (
+    get_biome_at_position,
+    get_biome_block,
+    get_surface_height_variation,
+    should_spawn_tree
+)
+from organism import (
+    Organism,
+    Tree,
+    create_organism,
+    ORGANISM_DEFINITIONS
+)
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="importlib._bootstrap")
 os.environ['SDL_AUDIODRIVER'] = 'dummy'
@@ -276,6 +288,7 @@ class World:
     def __init__(self):
         self.chunks = {}
         self.seed = random.randint(0, 1000000)
+        self.organisms = {}  # Dictionary to store organisms by position
         
     def get_chunk_coords(self, x, y):
         chunk_x = int(x // CHUNK_WIDTH)
@@ -307,54 +320,35 @@ class World:
                 
                 hex_y = world_y + local_row * HEX_V_SPACING
                 
-                # --- TERRAIN GENERATION FIX ---
-                # Calculate surface height for this specific X column using noise
-                # We use hex_x so the terrain flows smoothly across chunks
-                surface_height = base_ground_y + (
-                    100 * math.sin(hex_x * 0.005 + self.seed * 0.01) + 
-                    50 * math.cos(hex_x * 0.015 + self.seed * 0.02)
-                )
+                # --- IMPROVED TERRAIN GENERATION ---
+                # Get biome for this position
+                biome = get_biome_at_position(hex_x, self.seed)
                 
-                # If this hexagon is above the surface height, it's air. Skip it.
+                # Calculate surface height using biome-specific variation
+                height_variation = get_surface_height_variation(biome, hex_x, self.seed)
+                surface_height = base_ground_y + height_variation
+                
+                # Only generate hexagons below surface
                 if hex_y < surface_height:
                     continue
 
                 # Calculate depth relative to the surface
                 depth = int((hex_y - surface_height) / HEX_V_SPACING)
                 
-                # Biome logic (using world coordinates for continuity)
-                biome_noise = np.sin(hex_x * 0.002 + self.seed)
-                if biome_noise < -0.5:
-                    biome = "desert"
-                elif biome_noise > 0.5:
-                    biome = "mountain"
-                elif abs(biome_noise) < 0.2:
-                    biome = "forest"
-                else:
-                    biome = "plains"
-                
-                # Block selection based on depth
-                if depth == 0:
-                    block_type = 'sand' if biome == "desert" else 'grass'
-                elif depth <= 3:
-                    block_type = 'sand' if biome == "desert" else 'dirt'
-                elif depth <= 7:
-                    block_type = 'coal' if random.random() < 0.09 + depth*0.008 else 'stone'
-                elif depth <= 16:
-                    r = random.random()
-                    if r < 0.07 + depth*0.003: block_type = 'coal'
-                    elif r < 0.12 + depth*0.004: block_type = 'iron'
-                    else: block_type = 'stone'
-                else:
-                    r = random.random()
-                    if r < 0.04: block_type = 'coal'
-                    elif r < 0.09: block_type = 'iron'
-                    elif r < 0.13: block_type = 'gold'
-                    elif r < 0.17 and biome == "mountain": block_type = 'diamond'
-                    else: block_type = 'stone'
+                # Get appropriate block type using biome system
+                block_type = get_biome_block(biome, depth, hex_x, hex_y, self.seed)
                 
                 hexagon = Hexagon(hex_x, hex_y, HEX_SIZE, block_type)
                 chunk.add_hexagon(hex_x, hex_y, hexagon)
+                
+                # Try to spawn trees on surface blocks
+                if depth == 0 and should_spawn_tree(biome):
+                    # Check if there's space for a tree (no blocks above)
+                    above_hex_y = hex_y - HEX_V_SPACING
+                    above_hex = self.get_hexagon_at(hex_x, above_hex_y)
+                    if above_hex is None:
+                        # Spawn tree
+                        self.add_organism(hex_x, hex_y, "tree")
 
         # Procedural generation shouldn't mark the chunk as user-modified
         chunk.modified = False
@@ -375,6 +369,36 @@ class World:
                         nearby.append(hexagon)
         
         return nearby
+    
+    def add_organism(self, x, y, organism_type):
+        """Add an organism to the world at the given position."""
+        organism = create_organism(x, y, organism_type)
+        self.organisms[(x, y)] = organism
+        return organism
+    
+    def get_nearby_organisms(self, center_x, center_y, radius=200):
+        """Get all organisms within a certain radius of a point."""
+        nearby = []
+        for (ox, oy), organism in self.organisms.items():
+            distance = math.sqrt((ox - center_x)**2 + (oy - center_y)**2)
+            if distance <= radius:
+                nearby.append(organism)
+        return nearby
+    
+    def remove_organism(self, x, y):
+        """Remove an organism at the given position."""
+        if (x, y) in self.organisms:
+            del self.organisms[(x, y)]
+            return True
+        return False
+    
+    def get_organism_at(self, x, y, tolerance=30):
+        """Get an organism at or near the given position."""
+        for (ox, oy), organism in self.organisms.items():
+            distance = math.sqrt((ox - x)**2 + (oy - y)**2)
+            if distance <= tolerance:
+                return organism
+        return None
     
     def get_hexagon_at(self, wx, wy):
         # Get snapped hex center position and grid coordinates
@@ -491,6 +515,8 @@ class Player:
         self.inventory = {item_id: 0 for item_id in ITEM_DEFINITIONS.keys()}
         self.selected_slot = 0
         self.flight_mode = False  # Creative mode flight
+        self.width = 30  # Player width for collision
+        self.height = 50  # Player height for collision
         
     def get_selected_item(self):
         if self.selected_slot < len(DEFAULT_HOTBAR_ITEMS):
@@ -524,54 +550,94 @@ class Player:
             
             self.vel_y += GRAVITY
         
+        # Separate X and Y movement for better collision handling
         self.x += self.vel_x
+        self.handle_horizontal_collision(hexagons)
+        
         self.y += self.vel_y
+        self.handle_vertical_collision(hexagons)
         
-        # Collision with hexagons
-        if not self.flight_mode:
+        # Ensure on_ground state is properly updated
+        if not self.flight_mode and not self.on_ground:
             self.on_ground = False
-            hexagons_sorted = sorted(hexagons, key=lambda h: (h.x - self.x)**2 + (h.y - self.y)**2)
-            for hexagon in hexagons_sorted:
-                self.check_collision(hexagon)
     
-    def check_collision(self, hexagon):
-        dx = self.x - hexagon.x
-        dy = self.y - hexagon.y
-        distance_sq = dx * dx + dy * dy
-        
-        max_distance_sq = (self.radius + hexagon.size * 1.5) ** 2
-        if distance_sq > max_distance_sq:
+    def handle_horizontal_collision(self, hexagons):
+        """Handle horizontal collisions with hexagons."""
+        if self.flight_mode:
             return
-        
-        # Skip collision with transparent blocks
-        if hexagon.transparent:
-            return
-        
-        player_bottom = self.y + self.radius
-        surface_y = hexagon.get_top_surface_y(self.x)
-        
-        if surface_y is not None:
-            if self.vel_y >= 0 and player_bottom >= surface_y - 10 and player_bottom <= surface_y + 15:
-                self.y = surface_y - self.radius
-                self.vel_y = 0
-                self.on_ground = True
-                return
-        
-        if distance_sq < (self.radius + hexagon.size * 0.9) ** 2:
-            if self.y < hexagon.y:
-                overlap = (self.radius + hexagon.size * 0.9) - math.sqrt(distance_sq)
-                if overlap > 0:
-                    self.y -= overlap
-                    self.vel_y = 0
-                    self.on_ground = True
-                    return
             
-            if abs(dy) < hexagon.size * 0.7:
-                if dx > 0:
-                    self.x = hexagon.x + hexagon.size * 0.95 + self.radius
-                else:
-                    self.x = hexagon.x - hexagon.size * 0.95 - self.radius
-                self.vel_x = 0
+        player_left = self.x - self.radius
+        player_right = self.x + self.radius
+        
+        for hexagon in hexagons:
+            if hexagon.transparent:
+                continue
+                
+            # Check if player is horizontally colliding with this hexagon
+            hex_left = hexagon.x - hexagon.size * 0.866
+            hex_right = hexagon.x + hexagon.size * 0.866
+            
+            if player_right > hex_left and player_left < hex_right:
+                # Check vertical overlap
+                player_bottom = self.y + self.radius
+                player_top = self.y - self.radius
+                hex_bottom = hexagon.y + hexagon.size
+                hex_top = hexagon.y - hexagon.size
+                
+                if player_bottom > hex_top and player_top < hex_bottom:
+                    # Determine which side we're hitting
+                    if self.vel_x > 0:  # Moving right
+                        overlap = player_right - hex_left
+                        if overlap > 0 and overlap < self.radius + hexagon.size:
+                            self.x -= overlap
+                            self.vel_x = 0
+                    elif self.vel_x < 0:  # Moving left
+                        overlap = hex_right - player_left
+                        if overlap > 0 and overlap < self.radius + hexagon.size:
+                            self.x += overlap
+                            self.vel_x = 0
+    
+    def handle_vertical_collision(self, hexagons):
+        """Handle vertical collisions with hexagons."""
+        if self.flight_mode:
+            return
+            
+        player_bottom = self.y + self.radius
+        player_top = self.y - self.radius
+        
+        self.on_ground = False
+        
+        for hexagon in hexagons:
+            if hexagon.transparent:
+                continue
+                
+            # Check if player is vertically colliding with this hexagon
+            player_left = self.x - self.radius
+            player_right = self.x + self.radius
+            hex_left = hexagon.x - hexagon.size * 0.866
+            hex_right = hexagon.x + hexagon.size * 0.866
+            
+            if player_right > hex_left and player_left < hex_right:
+                # Check vertical collision
+                hex_bottom = hexagon.y + hexagon.size * 0.5
+                hex_top = hexagon.y - hexagon.size * 0.5
+                
+                if self.vel_y >= 0:  # Falling down
+                    # Check if landing on top of hexagon
+                    surface_y = hexagon.get_top_surface_y(self.x)
+                    if surface_y is not None:
+                        if player_bottom >= surface_y - 5 and player_bottom <= surface_y + 15:
+                            self.y = surface_y - self.radius
+                            self.vel_y = 0
+                            self.on_ground = True
+                            return
+                else:  # Moving up
+                    # Check if hitting bottom of hexagon
+                    if player_top < hex_bottom and player_bottom > hex_top:
+                        overlap = hex_bottom - player_top
+                        if overlap > 0:
+                            self.y += overlap
+                            self.vel_y = 0
     
     def jump(self):
         if self.on_ground or self.flight_mode:
@@ -639,7 +705,7 @@ class Game:
         self.state = "MENU"
         self.running = True
         self.player = None
-        self.world = World()
+        self.world = None
         self.particles = []
         self.mining = False
         self.camera_x = 0
@@ -648,11 +714,13 @@ class Game:
         self.paused = False
         self.game_mode = "survival"  # "survival" or "creative"
         self.render_distance = RENDER_DISTANCE
+        self.current_world_name = "world"
         
         # UI Elements
         self.buttons = []
         self._create_menu_buttons()
         self._create_pause_buttons()
+        self._get_worlds()
         
     def _create_sky_gradient(self):
         surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -671,12 +739,24 @@ class Game:
         button_height = 50
         center_x = SCREEN_WIDTH // 2 - button_width // 2
         
+        # World selection buttons (dynamic)
+        self.world_buttons = []
+        for i, world_name in enumerate(self.available_worlds[:5]):  # Show up to 5 worlds
+            y_pos = 250 + i * 60
+            button = Button(center_x, y_pos, button_width, button_height, f"World: {world_name}",
+                          GREEN, (120, 220, 120), 
+                          lambda wn=world_name: self.start_game("survival", world_name=wn))
+            self.world_buttons.append(button)
+        
+        # Add "New World" button
+        if len(self.world_buttons) < 5:
+            new_world_y = 250 + len(self.world_buttons) * 60
+            new_world_button = Button(center_x, new_world_y, button_width, button_height, "+ New World",
+                                    BLUE, (70, 170, 255), self.create_new_world)
+            self.world_buttons.append(new_world_button)
+        
         self.menu_buttons = [
-            Button(center_x, 300, button_width, button_height, "Survival Mode", 
-                   GREEN, (120, 220, 120), lambda: self.start_game("survival")),
-            Button(center_x, 370, button_width, button_height, "Creative Mode", 
-                   BLUE, (70, 170, 255), lambda: self.start_game("creative")),
-            Button(center_x, 440, button_width, button_height, "Exit", 
+            Button(center_x, 550, button_width, button_height, "Exit", 
                    RED, (220, 120, 120), lambda: self.quit_game())
         ]
     
@@ -694,17 +774,59 @@ class Game:
                    RED, (220, 120, 120), self.back_to_menu)
         ]
     
+    def _get_worlds(self):
+        """Get list of available world save files."""
+        self.available_worlds = []
+        if os.path.exists("saves"):
+            for filename in os.listdir("saves"):
+                if filename.endswith(".pkl") and not filename.startswith("player_"):
+                    world_name = filename.replace(".pkl", "")
+                    self.available_worlds.append(world_name)
+        
+        if not self.available_worlds:
+            self.available_worlds.append("world")
+    
     def quit_game(self):
         self.running = False
     
-    def start_game(self, mode):
+    def create_new_world(self):
+        """Create a new world with a unique name."""
+        base_name = "world"
+        counter = 1
+        while True:
+            new_name = f"{base_name}_{counter}" if counter > 1 else base_name
+            if new_name not in self.available_worlds:
+                break
+            counter += 1
+        
+        # Create saves directory if it doesn't exist
+        if not os.path.exists("saves"):
+            os.makedirs("saves")
+        
+        # Update available worlds list
+        self.available_worlds.append(new_name)
+        self._create_menu_buttons()
+        self.start_game("survival", world_name=new_name)
+    
+    def start_game(self, mode, world_name="world"):
         self.game_mode = mode
+        self.current_world_name = world_name
+        
+        # Ensure saves directory exists
+        if not os.path.exists("saves"):
+            os.makedirs("saves")
+        
+        # Create new world instance
+        self.world = World()
         
         # Try to load existing world
-        if self.world.load_from_file('world.pkl'):
+        world_file = os.path.join("saves", f"{world_name}.pkl")
+        player_file = os.path.join("saves", f"player_{world_name}.pkl")
+        
+        if self.world.load_from_file(world_file):
             # Find player spawn point from saved data
             try:
-                with open('player.pkl', 'rb') as f:
+                with open(player_file, 'rb') as f:
                     player_data = pickle.load(f)
                 self.player = Player(player_data['x'], player_data['y'])
                 self.player.inventory = player_data['inventory']
@@ -751,23 +873,48 @@ class Game:
     
     def save_game(self):
         if self.player:
-            self.world.save_to_file('world.pkl')
+            # Ensure saves directory exists
+            if not os.path.exists("saves"):
+                os.makedirs("saves")
+            
+            world_file = os.path.join("saves", f"{self.current_world_name}.pkl")
+            player_file = os.path.join("saves", f"player_{self.current_world_name}.pkl")
+            
+            self.world.save_to_file(world_file)
             player_data = {
                 'x': self.player.x,
                 'y': self.player.y,
                 'inventory': self.player.inventory,
                 'selected_slot': self.player.selected_slot
             }
-            with open('player.pkl', 'wb') as f:
+            with open(player_file, 'wb') as f:
                 pickle.dump(player_data, f)
     
     def back_to_menu(self):
-        self.save_game()
-        self.state = "MENU"
+        """Return to main menu, properly cleaning up game state."""
+        try:
+            self.save_game()
+        except Exception as e:
+            print(f"Error saving game: {e}")
+        
+        # Reset game state
+        self.player = None
+        self.world = World()
+        self.particles = []
+        self.camera_x = 0
+        self.camera_y = 0
         self.paused = False
+        self.state = "MENU"
     
     def handle_menu_input(self, event):
         mouse_pos = pygame.mouse.get_pos()
+        
+        # Handle world selection buttons
+        for button in self.world_buttons:
+            button.check_hover(mouse_pos)
+            button.handle_event(event)
+        
+        # Handle menu buttons (Exit)
         for button in self.menu_buttons:
             button.check_hover(mouse_pos)
             button.handle_event(event)
@@ -869,11 +1016,52 @@ class Game:
         world_mx = mouse_pos[0] + self.camera_x
         world_my = mouse_pos[1] + self.camera_y
         
+        # Check for organisms first
+        target_organism = self.world.get_organism_at(world_mx, world_my)
+        if target_organism:
+            # Check if in range
+            dx = self.player.x - target_organism.x
+            dy = self.player.y - target_organism.y
+            distance = math.sqrt(dx*dx + dy*dy)
+            
+            if distance <= MINING_RANGE:
+                # Get selected item type
+                selected_item = self.player.get_selected_item()
+                item_info = ITEM_DEFINITIONS.get(selected_item, {})
+                tool_type = item_info.get("tool_type", "none")
+                base_damage = item_info.get("damage", 1)
+                
+                # Damage organism
+                drops = target_organism.take_damage(tool_type, base_damage)
+                
+                # Create hit particles
+                for _ in range(5):
+                    particle = Particle(target_organism.x, target_organism.y, (200, 100, 50))
+                    self.particles.append(particle)
+                
+                # Handle drops if organism died
+                if not target_organism.alive:
+                    self.world.remove_organism(target_organism.x, target_organism.y)
+                    for drop_type, amount in drops:
+                        for _ in range(amount):
+                            self.player.add_to_inventory(drop_type)
+                            # Create drop particles
+                            for _ in range(3):
+                                particle = Particle(target_organism.x, target_organism.y - 20, 
+                                                  ITEM_ICON_COLOR_BY_ID.get(drop_type, (100, 100, 100)))
+                                self.particles.append(particle)
+            return
+        
         # Use raycasting for accurate block selection
         target_block, _ = self.raycast_to_block(self.player.x, self.player.y, world_mx, world_my)
         
         if target_block:
-            if target_block.take_damage(5):
+            # Get selected item for damage calculation
+            selected_item = self.player.get_selected_item()
+            item_info = ITEM_DEFINITIONS.get(selected_item, {})
+            base_damage = item_info.get("damage", 5)
+            
+            if target_block.take_damage(base_damage):
                 # Create particles
                 for _ in range(10):
                     particle = Particle(target_block.x, target_block.y, target_block.color)
@@ -889,6 +1077,37 @@ class Game:
         
         selected = self.player.get_selected_item()
         
+        # Check if selected item is placeable
+        item_info = ITEM_DEFINITIONS.get(selected, {})
+        item_type = item_info.get("type", "block")
+        
+        # Handle different item types
+        if item_type == "tool":
+            # Tools cannot be placed
+            return
+        
+        if item_type == "plantable":
+            # Plant sapling
+            # Check if there's a solid block below
+            place_x, place_y, col, row = pixel_to_hex_center(world_mx, world_my)
+            below_x, below_y, _, _ = pixel_to_hex_center(world_mx, world_my + HEX_V_SPACING)
+            
+            below_block = self.world.get_hexagon_at(below_x, below_y)
+            if below_block and not below_block.transparent:
+                # Check if there's already an organism here
+                if self.world.get_organism_at(place_x, place_y) is None:
+                    # In survival: consume from inventory
+                    if self.game_mode != "creative" and not self.player.remove_from_inventory(selected):
+                        return
+                    
+                    # For now, saplings don't grow - this is a placeholder for future growth logic
+                    # Create particles for planting
+                    for _ in range(5):
+                        particle = Particle(place_x, place_y, (50, 180, 50))
+                        self.particles.append(particle)
+            return
+        
+        # Regular block placement
         # Get snapped hex position
         place_x, place_y, col, row = pixel_to_hex_center(world_mx, world_my)
         
@@ -898,19 +1117,13 @@ class Game:
         dist_sq = dx*dx + dy*dy
         
         if dist_sq > MINING_RANGE**2:
-            if self.game_mode != "creative":
-                self.player.add_to_inventory(selected)
             return
         
         if dist_sq < (HEX_SIZE + self.player.radius)**2:
-            if self.game_mode != "creative":
-                self.player.add_to_inventory(selected)
             return
         
         # Check if position is already occupied
         if self.world.get_hexagon_at(place_x, place_y) is not None:
-            if self.game_mode != "creative":
-                self.player.add_to_inventory(selected)
             return
         
         # In survival: consume from inventory
@@ -954,34 +1167,34 @@ class Game:
         
         title_font = pygame.font.Font(None, 74)
         title = title_font.render("TESSELBOX", True, WHITE)
-        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 150))
+        title_rect = title.get_rect(center=(SCREEN_WIDTH // 2, 100))
         self.screen.blit(title, title_rect)
         
         subtitle_font = pygame.font.Font(None, 36)
-        subtitle = subtitle_font.render("Enhanced Minecraft-like Experience", True, GRAY)
-        subtitle_rect = subtitle.get_rect(center=(SCREEN_WIDTH // 2, 200))
+        subtitle = subtitle_font.render("Select a World to Play", True, GRAY)
+        subtitle_rect = subtitle.get_rect(center=(SCREEN_WIDTH // 2, 160))
         self.screen.blit(subtitle, subtitle_rect)
         
         mouse_pos = pygame.mouse.get_pos()
+        
+        # Draw world selection buttons
+        for button in self.world_buttons:
+            button.check_hover(mouse_pos)
+            button.draw(self.screen, pygame.font.Font(None, 32))
+        
+        # Draw menu buttons (Exit)
         for button in self.menu_buttons:
             button.check_hover(mouse_pos)
             button.draw(self.screen, pygame.font.Font(None, 32))
         
-        # Draw controls
-        font = pygame.font.Font(None, 24)
+        # Draw controls (simplified)
+        font = pygame.font.Font(None, 20)
         controls = [
-            "Controls:",
-            "WASD - Move",
-            "Space - Jump",
-            "Left Click - Mine",
-            "Right Click - Place",
-            "1-9 / Scroll - Select Block",
-            "+/- - Render Distance",
-            "F - Toggle Flight (Creative)",
-            "ESC - Pause/Menu"
+            "Controls: WASD-Move | Space-Jump | Left Click-Mine | Right Click-Place",
+            "1-9/Scroll-Select Item | +/--Render Distance | F-Flight (Creative) | ESC-Pause"
         ]
         
-        y_pos = 520
+        y_pos = 650
         for control in controls:
             text = font.render(control, True, DARK_GRAY)
             text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, y_pos))
@@ -1038,6 +1251,14 @@ class Game:
                 health_ratio = hexagon.health / hexagon.max_health
                 crack_color = (255, int(255 * health_ratio), int(255 * health_ratio))
                 pygame.draw.polygon(self.screen, crack_color, offset_corners, 3)
+        
+        # Draw visible organisms
+        visible_organisms = self.world.get_nearby_organisms(self.player.x, self.player.y, radius=600)
+        for organism in visible_organisms:
+            screen_x = organism.x - self.camera_x
+            screen_y = organism.y - self.camera_y
+            if -100 < screen_x < SCREEN_WIDTH + 100 and -100 < screen_y < SCREEN_HEIGHT + 100:
+                organism.draw(self.screen, self.camera_x, self.camera_y)
         
         # Draw particles
         for particle in self.particles:

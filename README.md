@@ -12,17 +12,31 @@ fixed the map showing error
 
 ## 🛠️ Installation
 
+🛠️ Build Requirements
 
--download form release(the newest one is recommanded)
+You must run the build command on the operating system you are targeting (e.g., use Windows to make the .exe).
 
--then select your os
+    #Install Dependencies: Open your terminal or command prompt and run:
+    Bash
 
--delect the zip files of other os your are not using
+    pip install pygame numpy
+    pip install pyinstaller
 
--then extract it
+    #Verify File Structure: Ensure all three files are in the same directory:
 
--done!
+        #main.py (The entry point)
 
+        #blocks.py
+
+        #item.py
+
+📦 Create the Executable
+
+Run the following command in your terminal. This command works for both Windows PowerShell/CMD and Linux Terminal
+
+    pyinstaller --onefile --windowed --name Tesselbox main.py
+
+---
 
 ## 🎮 Controls
 
