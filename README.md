@@ -10,8 +10,8 @@ Explore worlds, mine resources, build structures, craft items, fight enemies, an
 ## Migration Notice
 
 **Sorry!**  
-The game is currently migrating from a pure-Python prototype to a **Rust + Python hybrid** structure.  
-This refactor improves performance (Rust for core engine/world/physics) while keeping Python for game logic, scripting, and easier modding.  
+The game is currently migrating from a pure-Python prototype to a **Golang + Python hybrid** structure.  
+This refactor improves performance (Go for core engine/world/physics) while keeping Python for game logic, scripting, and easier modding.  
 
 Expect some features to be temporarily broken or incomplete during this phase.  
 Thanks for your patience — progress is ongoing!
